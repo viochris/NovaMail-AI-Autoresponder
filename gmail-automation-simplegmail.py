@@ -26,13 +26,32 @@ TELEGRAM_CHAT_ID = os.getenv("TELEGRAM_CHAT_ID")
 GOOGLE_API_KEY = os.getenv("GOOGLE_API_KEY")
 
 # ==============================================================================
+# DYNAMIC CREDENTIAL GENERATOR FOR CLOUD DEPLOYMENT (RAILWAY)
+# ==============================================================================
+# simplegmail requires physical 'credentials.json' and 'gmail_token.json' files.
+# For security, these files are .gitignored and should NEVER be pushed to GitHub.
+# This script generates them on the cloud server dynamically from Environment Variables.
+
+# # 1. Generate 'credentials.json' on the server
+# creds_env = os.getenv("GMAIL_CREDENTIALS")
+# if creds_env and not os.path.exists("credentials.json"):
+#     with open("credentials.json", "w") as f:
+#         f.write(creds_env)
+
+# 2. Generate 'gmail_token.json' on the server (Requires running locally once first)
+token_env = os.getenv("GMAIL_TOKEN")
+if token_env and not os.path.exists("gmail_token.json"):
+    with open("gmail_token.json", "w") as f:
+        f.write(token_env)
+
+# ==============================================================================
 # INITIALIZE CLIENTS
 # ==============================================================================
 # Initialize Google Gemini Client
 client = genai.Client(api_key=GOOGLE_API_KEY)
 
 # Initialize SimpleGmail Client (Requires client_secret.json in root dir)
-gmail = Gmail(client_secret_file='credentials.json')
+gmail = Gmail()
 
 print("🎧 NovaMail AI (Polling Mode) is listening to your Inbox...")
 
