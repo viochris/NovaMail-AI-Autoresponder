@@ -1,5 +1,6 @@
 # --- Standard Python Libraries ---
 import base64
+import html
 import os
 import time
 from datetime import datetime, timedelta, timezone
@@ -83,8 +84,11 @@ while True:
                     received_time_wib = str(msg.date)
 
                 # --- PREPARE TERMINAL PREVIEW ---
+                # DEFENSIVE PROGRAMMING: Ensure msg.plain is not None to prevent TypeError
+                safe_body = msg.plain if msg.plain else "(No plain text body. Email might be HTML only.)"
+
                 # Create a concise 100-character snippet for terminal logging
-                body_preview = f"{msg.plain[:100]}..." if len(msg.plain) > 100 else msg.plain
+                body_preview = f"{safe_body[:100]}..." if len(safe_body) > 100 else safe_body
 
                 print("\n==================================================")
                 print(f"📩 NEW EMAIL DETECTED!")
@@ -207,25 +211,32 @@ while True:
 
                 # Create a more detailed 500-character snippet for the Telegram report
                 # This ensures the report stays within Telegram's 4096 character limit
-                body_preview = f"{msg.plain[:500]}..." if len(msg.plain) > 500 else msg.plain
+                body_preview = f"{safe_body[:500]}..." if len(safe_body) > 500 else safe_body
 
-                # Prepare a well-formatted Markdown report for Telegram.
+                # Sanitize dynamic content to prevent Telegram API parsing errors (e.g., Error 400).
+                # This safely escapes special characters like <, >, and & within the email body.
+                safe_sender = html.escape(msg.sender)
+                safe_subject = html.escape(msg.subject)
+                safe_body_escaped = html.escape(body_preview)
+                safe_reply_escaped = html.escape(reply_text)
+
+                # Prepare a well-formatted HTML report for Telegram.
                 # Truncating the original message body to 500 chars to avoid Telegram's 4096 character limit.
                 telegram_report = (
-                    f"🚨 *NOVAMAIL AI REPORT* 🚨\n\n"
-                    f"🕒 *Received:* `{received_time_wib}`\n"
-                    f"👤 *From:* `{msg.sender}`\n"
-                    f"📌 *Subject:* {msg.subject}\n\n"
-                    f"💬 *Original Message:*\n{body_preview}\n\n"
-                    f"🤖 *AI Reply Sent:*\n_{reply_text}_\n\n"
-                    f"⏱️ *Replied At:* `{current_time}`"
+                    f"🚨 <b>NOVAMAIL AI REPORT</b> 🚨\n\n"
+                    f"🕒 <b>Received:</b> <code>{received_time_wib}</code>\n"
+                    f"👤 <b>From:</b> <code>{safe_sender}</code>\n"
+                    f"📌 <b>Subject:</b> {safe_subject}\n\n"
+                    f"💬 <b>Original Message:</b>\n{safe_body_escaped}\n\n"
+                    f"🤖 <b>AI Reply Sent:</b>\n<i>{safe_reply_escaped}</i>\n\n"
+                    f"⏱️ <b>Replied At:</b> <code>{current_time}</code>"
                 )
 
                 url = f"https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage"
                 data = {
                     "chat_id": TELEGRAM_CHAT_ID,
                     "text": telegram_report,
-                    "parse_mode": "Markdown"
+                    "parse_mode": "HTML" 
                 }
 
                 try:
@@ -238,10 +249,10 @@ while True:
                     else:
                         # Log the specific error from Telegram for debugging safely
                         print(f"❌ Telegram API Refused: Status Code {response.status_code}")
+                        print(f"⚠️ Telegram Error Detail: {response.text}")
                         
                 except Exception as e:
-                    # SAFE ERROR HANDLING
-                    # Preventing the 'url' variable (containing the token) from leaking in the logs.
+                    # Safely handle network errors without leaking sensitive URLs
                     error_str = str(e).lower()
 
                     if "connection" in error_str or "dns" in error_str:
